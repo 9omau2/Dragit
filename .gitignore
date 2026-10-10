@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+tests/*-preview.png
+playwright-report/
+test-results/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+Dragit/
