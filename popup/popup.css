@@ -730,3 +730,8 @@ input:checked + .slider:before {
 .switch input:focus-visible + .slider { outline: 2px solid #6d28d9; outline-offset: 3px; }
 .api-key-input-wrap .btn-icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 4px; }
 .modal-dialog { max-width: 370px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+/* Optional PDF reader */
+.addon-option { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.addon-option input { accent-color: #5b21b6; width: 16px; height: 16px; }
+.addon-note { margin: 10px 0 0; font-size: 11px; }
+#addon-title { margin: 0; }

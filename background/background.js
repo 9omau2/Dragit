@@ -1,4 +1,5 @@
 import "../shared/defaults.js";
+import "./pdf.js";
 const DEFAULTS = globalThis.AI_TRANSLATOR_DEFAULTS;
 export const DEFAULT_DOMAINS = [
   {
@@ -172,7 +173,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
-  if (['geminiApiKey', 'geminiModel', 'targetLang', 'selectedDomainId', 'domainPresets', 'selectionEnabled'].some(key => key in changes)) {
+  if (['geminiApiKey', 'geminiModel', 'targetLang', 'selectedDomainId', 'domainPresets', 'selectionEnabled', 'pdfViewerEnabled'].some(key => key in changes)) {
     for (const task of pending.values()) task.controller.abort();
     cache.clear();
   }

@@ -14,6 +14,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Translation Tab
   const selectTargetLang = document.getElementById("select-target-lang");
   const selectActiveDomain = document.getElementById("select-active-domain");
+  const pdfToggle = document.getElementById('pdf-viewer-toggle');
+  const pdfOptions = document.getElementById('pdf-viewer-options');
 
   // Domain Management Tab
   const domainListContainer = document.getElementById("domain-list-container");
@@ -49,7 +51,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     'targetLang',
     'selectedDomainId',
     'domainPresets',
-    'selectionEnabled'
+    'selectionEnabled',
+    'pdfViewerEnabled'
   ]);
 
   domainPresets = storageData.domainPresets || [];
@@ -57,6 +60,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const storedModel = storageData.geminiModel || globalThis.AI_TRANSLATOR_DEFAULTS.model;
   mainTranslateToggle.checked = storageData.selectionEnabled ?? true;
+  pdfToggle.checked = storageData.pdfViewerEnabled === true;
+  pdfOptions.hidden = !pdfToggle.checked;
+
+  pdfToggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ pdfViewerEnabled: pdfToggle.checked });
+    pdfOptions.hidden = !pdfToggle.checked;
+  });
+  document.getElementById('btn-open-pdf').addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const viewer = new URL(chrome.runtime.getURL('pdf/viewer.html'));
+      if (tab?.url && /^(https?|file):/i.test(tab.url) && /\.pdf(?:[?#]|$)/i.test(tab.url)) viewer.searchParams.set('file', tab.url);
+      await chrome.tabs.create({ url: viewer.href });
+    } catch { showToast('PDF 뷰어를 열지 못했습니다. 다시 시도해주세요.'); }
+  });
 
   // Set form controls
   selectTargetLang.value = storageData.targetLang || "ko";

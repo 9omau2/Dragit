@@ -5,7 +5,7 @@ node_modules/
 *.pem
 *.key
 *.log
-tests/*-preview.png
+tests/
 playwright-report/
 test-results/
 .DS_Store

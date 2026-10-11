@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dragit · PDF</title>
+  <link rel="stylesheet" href="../vendor/pdfjs/web/pdf_viewer.css">
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="toolbar-start">
+    <button id="toggle-thumbnails" class="toolbar-icon" aria-label="페이지 미리보기" title="페이지 미리보기" aria-controls="thumbnails" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <strong class="brand">Dragit <span>PDF</span></strong>
+    <span id="filename">PDF viewer</span>
+    </div>
+    <div class="page-controls">
+      <input id="page-number" type="number" min="1" value="1" aria-label="페이지" disabled>
+      <span id="page-count">/ 0</span>
+      <span class="control-divider" aria-hidden="true"></span>
+      <button id="zoom-out" class="toolbar-icon" aria-label="축소" title="축소" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
+      <label class="zoom-field"><input id="zoom" type="text" inputmode="decimal" value="100" aria-label="확대 비율 (%)" disabled><span aria-hidden="true">%</span></label>
+      <button id="zoom-in" class="toolbar-icon" aria-label="확대" title="확대" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg>
+      </button>
+    </div>
+    <div class="toolbar-actions">
+    <button id="open-file">Open PDF</button>
+    <button id="toggle-panel" aria-controls="translation" aria-expanded="true" aria-label="Result 패널 접기" title="Result 패널 접기">❋ Result</button>
+    </div>
+    <input id="file-input" type="file" accept=".pdf,application/pdf" hidden>
+  </header>
+  <div id="notice" role="status" hidden></div>
+  <div class="viewer-body">
+  <nav id="thumbnails" aria-label="페이지 미리보기" hidden><div id="thumbnail-list"></div></nav>
+  <main class="workspace" data-panel-position="right">
+    <section id="document" aria-label="PDF 문서" tabindex="0">
+      <div id="empty">
+        <div class="empty-symbol">❋</div>
+        <h1>Read. Select. Translate.</h1>
+        <p>Open PDF로 파일을 선택하세요.</p>
+        <form id="url-form">
+          <input id="pdf-url" type="url" placeholder="https://example.com/document.pdf" aria-label="PDF URL">
+          <button type="submit">Open URL</button>
+        </form>
+      </div>
+      <div id="pages"></div>
+    </section>
+    <div id="panel-divider" role="separator" tabindex="0" aria-label="번역 패널 크기 조절" aria-controls="translation" aria-orientation="vertical"></div>
+    <aside id="translation" aria-label="번역 패널">
+      <header>
+        <button id="collapse-panel" class="panel-icon" aria-controls="translation" aria-expanded="true" aria-label="Result 패널 접기" title="Result 패널 접기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path/></svg>
+        </button>
+        <strong>❋ Result</strong><div class="panel-actions">
+        <select id="panel-position" aria-label="패널 위치">
+          <option value="right">오른쪽</option><option value="bottom">아래</option>
+        </select>
+      </div></header>
+      <div id="result" aria-live="polite">글을 드래그하고 번역 아이콘을 누르세요.</div>
+      <button id="retry" hidden>다시 시도</button>
+    </aside>
+  </main>
+  </div>
+  <button id="translate-selection" title="선택한 글 번역" aria-label="선택한 글 번역" hidden>文<span>A</span></button>
+  <script src="../shared/defaults.js"></script>
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

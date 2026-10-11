@@ -10,14 +10,26 @@ A Chrome extension powered by Gemini.
 - Inline results that push page content down
 - Custom context for terminology and tone
 - Target language selector and on/off toggle
+- Optional PDF viewer with a translation panel
 
 ## Install
 
-1. Download and extract [Dragit 1.2.0](dist/Dragit-1.2.0.zip).
+1. Download and extract [Dragit 1.3.0](dist/Dragit-1.3.0.zip).
 2. Open `chrome://extensions` and enable **Developer mode**.
 3. Click **Load unpacked** and select the extracted folder.
 4. Open Dragit and add your [Gemini API key](https://aistudio.google.com/app/apikey) in API settings.
 5. Refresh the page, select text, and click the translation icon.
+
+## PDF
+
+Enable **Add-on → PDF viewer** in translation settings. Open or reload a `.pdf` URL, or choose a file with **Open PDF**. Select text and click the icon for a side-panel translation.
+
+- Page thumbnails and click-to-jump navigation
+- Resizable Result panel: right or bottom
+- Show or hide the panel with **Result**
+- 100% default zoom; type a percentage or use − / +
+
+Local PDF auto-open requires **Allow access to file URLs** in Chrome extension details. Scanned PDFs need a text layer; OCR is not included.
 
 ## Models
 
