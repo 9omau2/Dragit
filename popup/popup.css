@@ -730,8 +730,37 @@ input:checked + .slider:before {
 .switch input:focus-visible + .slider { outline: 2px solid #6d28d9; outline-offset: 3px; }
 .api-key-input-wrap .btn-icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 4px; }
 .modal-dialog { max-width: 370px; max-height: calc(100dvh - 24px); overflow-y: auto; }
-/* Optional PDF reader */
-.addon-option { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
-.addon-option input { accent-color: #5b21b6; width: 16px; height: 16px; }
-.addon-note { margin: 10px 0 0; font-size: 11px; }
-#addon-title { margin: 0; }
+/* Optional features */
+#addon-title { margin: 0 0 2px; }
+.addon-item { padding: 12px 0; }
+.addon-item + .addon-item { border-top: 1px solid #e8ecf4; }
+.addon-item:last-child { padding-bottom: 0; }
+.addon-option { display: grid; grid-template-columns: minmax(0, 1fr) 18px; column-gap: 14px; row-gap: 4px; cursor: pointer; }
+.addon-name { font-size: 12px; font-weight: 500; }
+.addon-option input { grid-column: 2; grid-row: 1 / 3; align-self: center; accent-color: #5b21b6; width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.addon-hint { grid-column: 1; font-size: 11px; color: #64748b; line-height: 1.5; }
+#pdf-viewer-options { margin-top: 9px; }
+
+/* Result typography settings */
+.setting-label { display: block; margin-top: 10px; font-size: 11px; color: #64748b; }
+.font-card .card-hint { margin: 3px 0 9px; color: #88909f; font-size: 10.5px; }
+.font-controls { display: grid; }
+.font-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
+.font-row + .font-row { border-top: 1px solid #f0edf5; }
+.font-row:last-child { padding-bottom: 0; }
+.font-row > label { color: #5b6272; font-size: 11.5px; }
+.font-choice, .font-size-stepper { width: 164px; flex-shrink: 0; height: 32px; }
+.font-choice, .font-size-value { position: relative; }
+.font-controls select { appearance: none; width: 100%; height: 100%; min-width: 0; padding: 0 28px 0 11px; border: 1px solid #e7e2ee; border-radius: 7px; background: #f8f7fb; color: #433c51; font-family: inherit; font-size: 12px; cursor: pointer; }
+.font-controls select:hover { border-color: #cfc4e2; }
+.font-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #90839f; pointer-events: none; }
+.font-controls select:focus-visible, .font-size-stepper button:focus-visible, .font-reset:focus-visible { outline: 2px solid #a78bda; outline-offset: 2px; }
+.font-reset { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; margin-right: -5px; border: 0; border-radius: 4px; background: transparent; color: #8c8497; font-family: inherit; font-size: 10px; cursor: pointer; }
+.font-reset:hover { color: #6d28d9; background: #f5f1fb; }
+.font-size-stepper { display: flex; align-items: center; gap: 5px; }
+.font-size-stepper button { display: grid; place-items: center; flex: 0 0 30px; height: 30px; padding: 0; border: 1px solid #e7e2ee; border-radius: 7px; background: #fff; color: #766588; cursor: pointer; }
+.font-size-stepper button:hover:not(:disabled) { background: #f3eef9; border-color: #cfc4e2; }
+.font-size-stepper button:disabled { color: #c8c2d0; border-color: #efecf3; cursor: default; }
+.font-size-value { flex: 1; height: 32px; min-width: 0; }
+.font-size-value select { text-align: center; padding: 0 18px 0 4px; font-variant-numeric: tabular-nums; }
+.font-size-value .font-chevron { right: 7px; }

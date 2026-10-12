@@ -13,3 +13,6 @@ Thumbs.db
 .vscode/
 .idea/
 Dragit/
+
+# Release packages live in GitHub Releases.
+dist/

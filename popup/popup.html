@@ -23,7 +23,7 @@
         </div>
         <div class="logo-text">
           <h1>Dragit</h1>
-          <span class="version-tag">v1.3</span>
+          <span class="version-tag">v1.4</span>
         </div>
       </div>
       <label class="switch" title="Dragit 켜기 / 끄기">
@@ -36,7 +36,7 @@
     <nav class="nav-tabs">
       <button class="nav-tab active" data-tab="tab-translate">번역 설정</button>
       <button class="nav-tab" data-tab="tab-domain">컨텍스트 (<span id="domain-count-badge">6</span>)</button>
-      <button class="nav-tab" data-tab="tab-ai">API 설정</button>
+      <button class="nav-tab" data-tab="tab-ai">Setting</button>
     </nav>
 
     <!-- Tab 1: Translation Settings -->
@@ -89,14 +89,31 @@
 
       </div>
 
-      <section class="card" aria-labelledby="addon-title">
-        <div class="card-header-row">
-          <h2 class="card-title" id="addon-title">Add-on</h2>
-          <label class="addon-option"><input type="checkbox" id="pdf-viewer-toggle"> PDF viewer</label>
+      <section class="card addon-card" aria-labelledby="addon-title">
+        <h2 class="card-title" id="addon-title">Add-on</h2>
+        <div class="addon-item">
+          <label class="addon-option">
+            <span class="addon-name">Chameleon</span>
+            <input type="checkbox" id="chameleon-toggle" aria-describedby="chameleon-hint">
+            <span class="addon-hint" id="chameleon-hint">번역 박스를 페이지 색상에 맞춥니다.</span>
+          </label>
         </div>
-        <div id="pdf-viewer-options" hidden>
-          <p class="card-hint">PDF에서 선택한 글을 side 패널로 번역합니다.</p>
-          <button type="button" class="btn-secondary-sm" id="btn-open-pdf">Open PDF ↗</button>
+        <div class="addon-item">
+          <label class="addon-option">
+            <span class="addon-name">Text polish</span>
+            <input type="checkbox" id="result-format-toggle" aria-describedby="result-format-hint">
+            <span class="addon-hint" id="result-format-hint">원문의 강조·코드 서식을 번역에도 살립니다.</span>
+          </label>
+        </div>
+        <div class="addon-item">
+          <label class="addon-option">
+            <span class="addon-name">PDF viewer</span>
+            <input type="checkbox" id="pdf-viewer-toggle" aria-describedby="pdf-viewer-hint">
+            <span class="addon-hint" id="pdf-viewer-hint">PDF에서 선택한 글을 side 패널로 번역합니다.</span>
+          </label>
+          <div id="pdf-viewer-options" hidden>
+            <button type="button" class="btn-secondary-sm" id="btn-open-pdf">Open PDF ↗</button>
+          </div>
         </div>
       </section>
     </main>
@@ -142,14 +159,15 @@
       </div>
     </section>
 
-    <!-- Tab 3: AI Engine Settings (Gemini API) -->
+    <!-- Tab 3: Settings -->
     <section class="tab-content" id="tab-ai">
       <!-- Gemini Settings -->
       <div class="card" id="section-gemini-settings">
         <div class="card-header-row">
-          <label class="card-title">Gemini API key</label>
+          <h2 class="card-title">API 설정</h2>
           <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-link">키 발급 ↗</a>
         </div>
+        <label class="setting-label" for="input-gemini-key">Gemini API key</label>
         <div class="api-key-input-wrap">
           <input type="password" id="input-gemini-key" placeholder="AIzaSy..." spellcheck="false">
           <button type="button" class="btn-icon" id="btn-toggle-key-visibility" title="API 키 표시" aria-label="API 키 표시" aria-pressed="false">
@@ -173,6 +191,45 @@
         </div>
         <div class="test-result-msg" id="gemini-test-result"></div>
       </div>
+      <section class="card font-card" aria-labelledby="font-settings-title">
+        <div class="card-header-row">
+          <h2 class="card-title" id="font-settings-title">폰트 설정</h2>
+          <button type="button" class="font-reset" id="btn-reset-font" title="기본 글꼴 · 14 px로 초기화" aria-label="폰트 설정 초기화">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/></svg>
+            초기화
+          </button>
+        </div>
+        <p class="card-hint">웹·PDF 번역 결과에 적용</p>
+        <div class="font-controls">
+          <div class="font-row">
+            <label for="select-result-font">글꼴</label>
+            <div class="font-choice">
+              <select id="select-result-font">
+                <option value="system">기본 · System</option>
+                <option value="sans">고딕 · Sans</option>
+                <option value="serif">명조 · Serif</option>
+                <option value="mono">고정폭 · Mono</option>
+              </select>
+              <svg class="font-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+            </div>
+          </div>
+          <div class="font-row">
+            <label for="select-result-font-size">글자 크기</label>
+            <div class="font-size-stepper">
+              <button type="button" id="btn-font-smaller" aria-label="글자 크기 줄이기" title="글자 크기 줄이기">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+              </button>
+              <div class="font-size-value">
+                <select id="select-result-font-size"></select>
+                <svg class="font-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+              </div>
+              <button type="button" id="btn-font-larger" aria-label="글자 크기 키우기" title="글자 크기 키우기">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
     </section>
 
     <!-- Footer Toast Notification -->

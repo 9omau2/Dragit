@@ -6,7 +6,10 @@ import { setupThumbnails } from './thumbnails.js';
 GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/build/pdf.worker.mjs');
 const $ = id => document.getElementById(id);
 const scroller = $('document'), pages = $('pages'), icon = $('translate-selection');
-let settings = await chrome.storage.local.get(['pdfViewerEnabled', 'selectionEnabled']);
+let settings = await chrome.storage.local.get(['pdfViewerEnabled', 'selectionEnabled', 'resultFormatEnabled', 'resultFontFamily', 'resultFontSize']);
+let rawResult = null;
+globalThis.DRAGIT_RESULT_FONTS.apply($('result'), settings);
+function renderResult() { globalThis.DRAGIT_RESULT_FORMAT($('result'), rawResult, settings.resultFormatEnabled === true); }
 let loadingTask, pdf, states = [], observer, generation = 0, rendering = false;
 let selectionTimer, selectedText = '', requestId, requestSequence = 0, retryText = '';
 let currentPage = 1, initialPage = 1, selecting = false;
@@ -17,6 +20,7 @@ const thumbnails = setupThumbnails(goToPage);
 
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 function idleResult() {
+  rawResult = null;
   $('result').textContent = enabled() ? '글을 드래그하고 번역 아이콘을 누르세요.' : 'Dragit의 번역 설정에서 PDF viewer와 번역 토글을 켜주세요.';
   $('result').className = 'muted';
 }
@@ -33,6 +37,14 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') rese
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   for (const key of ['pdfViewerEnabled', 'selectionEnabled']) if (changes[key]) settings[key] = changes[key].newValue;
+  if (changes.resultFontFamily || changes.resultFontSize) {
+    for (const key of ['resultFontFamily', 'resultFontSize']) if (changes[key]) settings[key] = changes[key].newValue;
+    globalThis.DRAGIT_RESULT_FONTS.apply($('result'), settings);
+  }
+  if (changes.resultFormatEnabled) {
+    settings.resultFormatEnabled = changes.resultFormatEnabled.newValue === true;
+    if (rawResult !== null) renderResult();
+  }
   if (['pdfViewerEnabled','selectionEnabled','targetLang','selectedDomainId','domainPresets','geminiApiKey','geminiModel'].some(key => changes[key])) resetTranslation();
 });
 
@@ -40,6 +52,7 @@ async function translate(text) {
   if (!enabled() || !text.trim()) return;
   resultPanel.show();
   cancelTranslation();
+  rawResult = null;
   retryText = text;
   const sequence = requestSequence;
   $('result').className = '';
@@ -53,7 +66,8 @@ async function translate(text) {
     const response = await chrome.runtime.sendMessage({ type: 'TRANSLATE_TEXT', text, requestId });
     if (sequence !== requestSequence) return;
     if (!response?.success) throw new Error(response?.error || '번역하지 못했습니다. 다시 시도해주세요.');
-    $('result').textContent = response.translation;
+    rawResult = response.translation;
+    renderResult();
   } catch (error) {
     if (sequence !== requestSequence) return;
     $('result').textContent = error.message;

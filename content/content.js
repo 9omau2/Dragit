@@ -3,12 +3,43 @@
   if (window.__AI_TRANSLATOR_INITIALIZED__) return;
   window.__AI_TRANSLATOR_INITIALIZED__ = true;
   const { maxChars, selectionEnabled } = globalThis.AI_TRANSLATOR_DEFAULTS;
-  const settingKeys = ['selectionEnabled', 'targetLang', 'selectedDomainId', 'domainPresets', 'geminiModel'];
+  const settingKeys = ['selectionEnabled', 'targetLang', 'selectedDomainId', 'domainPresets', 'geminiModel', 'chameleonEnabled', 'resultFormatEnabled', 'resultFontFamily', 'resultFontSize'];
   let settings = { selectionEnabled };
   let host, root, iconHost, panel, selectionButton, result, status, retry;
   let pendingSelection = null;
   let timer, pointerDown = false, sequence = 0, activeRequest = null;
   let lastPayload = null;
+  let rawResult = '';
+  let resultCodeTerms = [];
+  function renderResult(text = rawResult) {
+    rawResult = text;
+    globalThis.DRAGIT_RESULT_FONTS.apply(result, settings);
+    globalThis.DRAGIT_RESULT_FORMAT(result, rawResult, settings.resultFormatEnabled === true, resultCodeTerms);
+  }
+  let themeAnchor, themeFrame;
+  const themeObserver = new MutationObserver(() => scheduleTheme());
+  function scheduleTheme() {
+    cancelAnimationFrame(themeFrame);
+    if (host?.isConnected && settings.chameleonEnabled) themeFrame = requestAnimationFrame(applyTheme);
+  }
+  function applyTheme() {
+    if (!panel) return;
+    for (const property of [...panel.style]) if (property.startsWith('--panel-')) panel.style.removeProperty(property);
+    if (settings.chameleonEnabled && themeAnchor?.isConnected) {
+      const palette = globalThis.DRAGIT_CHAMELEON.palette(themeAnchor);
+      for (const [property, value] of Object.entries(palette)) panel.style.setProperty(property, value);
+    }
+  }
+  function watchTheme(anchor) {
+    themeObserver.disconnect();
+    themeAnchor = anchor;
+    applyTheme();
+    if (!settings.chameleonEnabled) return;
+    for (let node = anchor; node; node = node.parentElement) {
+      themeObserver.observe(node, { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode', 'data-dark-mode'] });
+    }
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', scheduleTheme);
   const editable = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 
   function ensureUI() {
@@ -19,12 +50,12 @@
     root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('link');
     style.rel = 'stylesheet';
-    style.href = chrome.runtime.getURL('content/content.css');
+    style.href = chrome.runtime.getURL('content/content.css') + '?v=inline-code-2';
     root.append(style);
     const ui = document.createElement('div');
     ui.innerHTML = `
       <section class="panel" hidden role="region" aria-label="번역 결과">
-        <header><strong>❋ Result</strong><button class="close" type="button" aria-label="번역 창 닫기">×</button></header>
+        <header><strong><span class="result-symbol">❋</span> Result</strong><button class="close" type="button" aria-label="번역 창 닫기">×</button></header>
         <div class="status" hidden role="status" aria-live="polite"></div>
         <div class="translation-body"><div class="result" dir="auto"></div></div>
         <button class="retry" type="button" hidden>다시 시도</button>
@@ -53,7 +84,7 @@
     selectionButton.addEventListener('click', () => {
       const selection = pendingSelection;
       hideSelectionButton();
-      if (selection) translate(selection.text, '선택한 글', '', selection.anchor);
+      if (selection) translate(selection.text, '선택한 글', '', selection.anchor, selection.codeTerms, selection.formatting);
     });
     iconRoot.append(selectionButton);
     document.documentElement.append(iconHost);
@@ -68,6 +99,8 @@
   }
 
   function closePanel() {
+    themeObserver.disconnect();
+    cancelAnimationFrame(themeFrame);
     clearTimeout(timer);
     cancelActive();
     if (panel) panel.hidden = true;
@@ -83,6 +116,44 @@
     if (!start || !end || start.getRootNode() === root || end.getRootNode() === root || host?.contains(start) || host?.contains(end) ||
         start.closest(editable) || end.closest(editable) || document.activeElement?.closest(editable)) return '';
     return selection.toString().trim();
+  }
+
+  function selectionCodeTerms() {
+    const selection = getSelection();
+    if (!selection?.rangeCount || selection.isCollapsed) return [];
+    const range = selection.getRangeAt(0);
+    const terms = [...range.cloneContents().querySelectorAll('code')].map(node => node.textContent.trim());
+    const common = range.commonAncestorContainer;
+    const element = common.nodeType === Node.ELEMENT_NODE ? common : common.parentElement;
+    if (element?.closest('code')) terms.push(selection.toString().trim());
+    return [...new Set(terms)].filter(term => term && term.length <= 256 && !/[\r\n]/.test(term)).slice(0, 64);
+  }
+
+  function selectionFormatting(text) {
+    const selection = getSelection();
+    if (!selection?.rangeCount || selection.isCollapsed || text.length > maxChars) return [];
+    const range = selection.getRangeAt(0), common = range.commonAncestorContainer;
+    const walker = document.createTreeWalker(common, NodeFilter.SHOW_TEXT);
+    const nodes = common.nodeType === Node.TEXT_NODE ? [common] : [];
+    while (walker.nextNode()) if (range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
+    let cursor = 0;
+    const spans = [];
+    for (const node of nodes) {
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      const value = node.textContent.slice(start, end).trim();
+      if (!value) continue;
+      const pattern = new RegExp(value.split(/\s+/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'), 'g');
+      pattern.lastIndex = cursor;
+      const match = pattern.exec(text);
+      if (!match) continue;
+      cursor = match.index + match[0].length;
+      for (const [selector, style] of [['strong,b', 'strong'], ['em,i', 'em'], ['code', 'code']]) {
+        if (node.parentElement?.closest(selector)) spans.push({ start: match.index, end: cursor, style });
+      }
+      if (spans.length >= 128) break;
+    }
+    return spans.slice(0, 128);
   }
 
   // The range end is in document order even when the user drags backwards.
@@ -126,6 +197,7 @@
       anchor.after(host);
     }
     panel.hidden = false;
+    watchTheme(anchor);
     widenPanel();
   }
 
@@ -166,21 +238,22 @@
       const text = selectionText();
       if (!text) { hideSelectionButton(); return; }
       ensureUI();
-      pendingSelection = { text, anchor: selectionAnchor() };
+      pendingSelection = { text, anchor: selectionAnchor(), codeTerms: selectionCodeTerms(), formatting: selectionFormatting(text) };
       positionSelectionButton();
     }, 150);
   }
 
-  async function translate(text, label, note = '', anchor = selectionAnchor()) {
+  async function translate(text, label, note = '', anchor = selectionAnchor(), codeTerms = selectionCodeTerms(), formatting = selectionFormatting(text)) {
     text = text.trim();
     if (!text) return;
     clearTimeout(timer);
     cancelActive();
     const version = sequence;
     hideSelectionButton();
-    lastPayload = [text, label, note, anchor];
+    lastPayload = [text, label, note, anchor, codeTerms, formatting];
+    resultCodeTerms = codeTerms;
     placePanel(anchor);
-    result.textContent = '';
+    renderResult('');
     retry.hidden = true;
     status.hidden = false;
     if (text.length > maxChars) {
@@ -191,10 +264,10 @@
     const requestId = crypto.randomUUID();
     activeRequest = requestId;
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'TRANSLATE_TEXT', text, requestId });
+      const response = await chrome.runtime.sendMessage({ type: 'TRANSLATE_TEXT', text, requestId, formatting: settings.resultFormatEnabled === true ? formatting : [] });
       if (version !== sequence) return;
       if (!response?.success) throw new Error(response?.error || '번역 응답을 받지 못했습니다. 다시 시도해주세요.');
-      result.textContent = response.translation;
+      renderResult(response.translation);
       status.textContent = note;
       status.hidden = !note;
     } catch (error) {
@@ -252,7 +325,7 @@
     else {
       cancelActive();
       placePanel(document.body);
-      result.textContent = '';
+      renderResult('');
       retry.hidden = true;
       status.hidden = false;
       status.textContent = '현재 화면에 번역할 글이 없습니다. 원하는 글을 드래그해주세요.';
@@ -277,7 +350,7 @@
   });
   window.addEventListener('blur', () => { pointerDown = false; clearTimeout(timer); });
   document.addEventListener('scroll', positionSelectionButton, { capture: true, passive: true });
-  window.addEventListener('resize', () => { positionSelectionButton(); widenPanel(); });
+  window.addEventListener('resize', () => { positionSelectionButton(); widenPanel(); scheduleTheme(); });
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'TRANSLATE_CURRENT') {
@@ -297,6 +370,11 @@
   }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !settingKeys.some(key => key in changes)) return;
+    if (Object.keys(changes).filter(key => settingKeys.includes(key)).every(key => ['chameleonEnabled', 'resultFormatEnabled', 'resultFontFamily', 'resultFontSize'].includes(key))) {
+      for (const key of ['chameleonEnabled', 'resultFormatEnabled', 'resultFontFamily', 'resultFontSize']) if (changes[key]) settings[key] = changes[key].newValue;
+      if (host?.isConnected) { watchTheme(themeAnchor); renderResult(); }
+      return;
+    }
     closePanel();
     loadSettings().catch(() => {});
   });

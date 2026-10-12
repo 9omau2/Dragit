@@ -93,7 +93,7 @@ button:focus-visible,input:focus-visible,select:focus-visible { outline: 2px sol
 }
 #translation { background: #fff; border-left: 1px solid #dedee8; overflow: auto; min-width: 0; }
 #translation header { display: flex; align-items: center; gap: 8px; background: #f6f3ff; color: #5b21b6; padding: 5px 10px; position: sticky; top: 0; z-index: 1; }
-#result { padding: 14px 16px; font-size: 15px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+#result { padding: 14px 16px; font-size: 14px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 #result.muted { color: #818198; }
 #result.error { color: #a32942; }
 #retry { margin: 0 16px 16px; }
@@ -120,3 +120,11 @@ button:focus-visible,input:focus-visible,select:focus-visible { outline: 2px sol
   .toolbar-actions { grid-column: 2; grid-row: 1; }
   .page-controls { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
 }
+
+#result code { font-family: Consolas, "SFMono-Regular", Menlo, monospace; font-size: 1em; font-weight: 500; line-height: inherit; color: var(--panel-code-text, #4d3489); background: var(--panel-code-bg, #f0edf6); border: 1px solid color-mix(in srgb, currentColor 12%, transparent); border-radius: 5px; padding: 1px 5px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
+#result strong { font-size: inherit; color: inherit; font-weight: 650; }
+
+@media (forced-colors: active) { #result code { color: CanvasText; background: Canvas; border-color: CanvasText; } }
+
+#result em { font-size: inherit; color: inherit; font-style: italic; }

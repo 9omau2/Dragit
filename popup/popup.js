@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const selectActiveDomain = document.getElementById("select-active-domain");
   const pdfToggle = document.getElementById('pdf-viewer-toggle');
   const pdfOptions = document.getElementById('pdf-viewer-options');
+  const chameleonToggle = document.getElementById('chameleon-toggle');
+  const resultFormatToggle = document.getElementById('result-format-toggle');
 
   // Domain Management Tab
   const domainListContainer = document.getElementById("domain-list-container");
@@ -52,7 +54,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     'selectedDomainId',
     'domainPresets',
     'selectionEnabled',
-    'pdfViewerEnabled'
+    'pdfViewerEnabled',
+    'chameleonEnabled',
+    'resultFormatEnabled',
+    'resultFontFamily',
+    'resultFontSize'
   ]);
 
   domainPresets = storageData.domainPresets || [];
@@ -62,6 +68,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   mainTranslateToggle.checked = storageData.selectionEnabled ?? true;
   pdfToggle.checked = storageData.pdfViewerEnabled === true;
   pdfOptions.hidden = !pdfToggle.checked;
+  chameleonToggle.checked = storageData.chameleonEnabled === true;
+  resultFormatToggle.checked = storageData.resultFormatEnabled === true;
+  resultFormatToggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ resultFormatEnabled: resultFormatToggle.checked });
+  });
+  chameleonToggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ chameleonEnabled: chameleonToggle.checked });
+  });
 
   pdfToggle.addEventListener('change', async () => {
     await chrome.storage.local.set({ pdfViewerEnabled: pdfToggle.checked });
@@ -74,6 +88,42 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (tab?.url && /^(https?|file):/i.test(tab.url) && /\.pdf(?:[?#]|$)/i.test(tab.url)) viewer.searchParams.set('file', tab.url);
       await chrome.tabs.create({ url: viewer.href });
     } catch { showToast('PDF 뷰어를 열지 못했습니다. 다시 시도해주세요.'); }
+  });
+
+  const fonts = globalThis.DRAGIT_RESULT_FONTS;
+  const fontFamily = document.getElementById('select-result-font');
+  const fontSize = document.getElementById('select-result-font-size');
+  const fontSmaller = document.getElementById('btn-font-smaller');
+  const fontLarger = document.getElementById('btn-font-larger');
+  for (const size of fonts.sizes) fontSize.add(new Option(`${size} px`, String(size)));
+  const storedFont = fonts.normalize(storageData);
+  fontFamily.value = storedFont.family;
+  fontSize.value = String(storedFont.size);
+  function updateFontButtons() {
+    const index = fonts.sizes.indexOf(Number(fontSize.value));
+    fontSmaller.disabled = index <= 0;
+    fontLarger.disabled = index >= fonts.sizes.length - 1;
+  }
+  async function saveFont() {
+    updateFontButtons();
+    await chrome.storage.local.set({ resultFontFamily: fontFamily.value, resultFontSize: Number(fontSize.value) });
+  }
+  function stepFont(direction) {
+    const index = fonts.sizes.indexOf(Number(fontSize.value));
+    const next = Math.max(0, Math.min(fonts.sizes.length - 1, index + direction));
+    fontSize.value = String(fonts.sizes[next]);
+    saveFont();
+  }
+  updateFontButtons();
+  fontSmaller.addEventListener('click', () => stepFont(-1));
+  fontLarger.addEventListener('click', () => stepFont(1));
+  fontFamily.addEventListener('change', saveFont);
+  fontSize.addEventListener('change', saveFont);
+  document.getElementById('btn-reset-font').addEventListener('click', async () => {
+    fontFamily.value = 'system';
+    fontSize.value = String(fonts.defaultSize);
+    await saveFont();
+    showToast('폰트 설정을 초기화했습니다.');
   });
 
   // Set form controls
