@@ -11,10 +11,11 @@
   let lastPayload = null;
   let rawResult = '';
   let resultCodeTerms = [];
+  let resultFormatting = [];
   function renderResult(text = rawResult) {
     rawResult = text;
     globalThis.DRAGIT_RESULT_FONTS.apply(result, settings);
-    globalThis.DRAGIT_RESULT_FORMAT(result, rawResult, settings.resultFormatEnabled === true, resultCodeTerms);
+    globalThis.DRAGIT_RESULT_FORMAT(result, rawResult, settings.resultFormatEnabled === true, resultCodeTerms, resultFormatting);
   }
   let themeAnchor, themeFrame;
   const themeObserver = new MutationObserver(() => scheduleTheme());
@@ -252,6 +253,7 @@
     hideSelectionButton();
     lastPayload = [text, label, note, anchor, codeTerms, formatting];
     resultCodeTerms = codeTerms;
+    resultFormatting = [];
     placePanel(anchor);
     renderResult('');
     retry.hidden = true;
@@ -267,6 +269,7 @@
       const response = await chrome.runtime.sendMessage({ type: 'TRANSLATE_TEXT', text, requestId, formatting: settings.resultFormatEnabled === true ? formatting : [] });
       if (version !== sequence) return;
       if (!response?.success) throw new Error(response?.error || '번역 응답을 받지 못했습니다. 다시 시도해주세요.');
+      resultFormatting = response.formatting || [];
       renderResult(response.translation);
       status.textContent = note;
       status.hidden = !note;

@@ -1,5 +1,5 @@
 /* Only inline code, bold and emphasis. Never interpret HTML or links. */
-globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = []) => {
+globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = [], sourceStyles = []) => {
   text = String(text ?? '');
   if (!enabled || text.length > 100000) { element.textContent = text; return; }
   const escaped = (source, index) => {
@@ -73,7 +73,26 @@ globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = []) => {
     flush();
     return fragment;
   }
-  const fragment = inline(text);
+  // Validated translation offsets are rendered with a tiny tag allowlist.
+  // Never insert the model response as HTML.
+  const styles = Array.isArray(sourceStyles) && sourceStyles.length <= 128 && sourceStyles.every(s =>
+    s && Number.isInteger(s.start) && Number.isInteger(s.end) && s.start >= 0 && s.end > s.start && s.end <= text.length &&
+    Array.isArray(s.styles) && s.styles.length > 0 && s.styles.every(style => ['strong', 'em', 'code'].includes(style))) ? sourceStyles : [];
+  let fragment;
+  if (styles.length) {
+    fragment = document.createDocumentFragment();
+    const bounds = [...new Set([0, text.length, ...styles.flatMap(s => [s.start, s.end])])].sort((a, b) => a - b);
+    for (let i = 0; i < bounds.length - 1; i++) {
+      const start = bounds[i], end = bounds[i + 1];
+      let node = document.createTextNode(text.slice(start, end));
+      for (const style of ['code', 'em', 'strong']) {
+        if (!styles.some(s => s.start <= start && s.end >= end && s.styles.includes(style))) continue;
+        const wrapper = document.createElement(style);
+        wrapper.append(node); node = wrapper;
+      }
+      fragment.append(node);
+    }
+  } else fragment = inline(text);
   // Restore exact code terms from the selection when the model omits backticks.
   // Only the selected <code> text is considered; never guess from normal prose.
   const terms = [...new Set(sourceCode)].filter(term => typeof term === 'string' && term.length > 0 && term.length <= 256 && !/[\r\n]/.test(term)).slice(0, 64).sort((a, b) => b.length - a.length);
