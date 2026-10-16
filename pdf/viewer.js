@@ -26,7 +26,7 @@ function idleResult() {
 }
 function cancelTranslation() {
   requestSequence++;
-  if (requestId) chrome.runtime.sendMessage({ type: 'CANCEL_TRANSLATION', requestId }).catch(() => {});
+  if (requestId) void globalThis.DRAGIT_RUNTIME.cancel(requestId);
   requestId = null;
   $('retry').hidden = true;
   icon.hidden = true;
@@ -63,7 +63,7 @@ async function translate(text) {
   $('result').textContent = '번역 중…';
   requestId = crypto.randomUUID();
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'TRANSLATE_TEXT', text, requestId });
+    const response = await globalThis.DRAGIT_RUNTIME.send({ type: 'TRANSLATE_TEXT', text, requestId });
     if (sequence !== requestSequence) return;
     if (!response?.success) throw new Error(response?.error || '번역하지 못했습니다. 다시 시도해주세요.');
     rawResult = response.translation;

@@ -94,7 +94,7 @@
   function cancelActive() {
     sequence++;
     if (activeRequest) {
-      chrome.runtime.sendMessage({ type: 'CANCEL_TRANSLATION', requestId: activeRequest }).catch(() => {});
+      void globalThis.DRAGIT_RUNTIME.cancel(activeRequest);
       activeRequest = null;
     }
   }
@@ -187,6 +187,14 @@
   function placePanel(anchor) {
     ensureUI();
     anchor = anchor?.isConnected && anchor !== host ? anchor : document.body;
+    // A block can itself be a link, or live inside one. Keep the entire result
+    // outside clickable ancestors, including when flex/grid placement appends it.
+    const clickable = 'a[href], button, label, [role="link"], [role="button"]';
+    while (anchor !== document.body) {
+      const container = anchor.closest(clickable);
+      if (!container) break;
+      anchor = findBlock(container.parentElement) || document.body;
+    }
     // Stay inside list items / table cells. In a row or grid, append to the text block
     // instead of creating a new layout column or changing list numbering.
     const parentDisplay = anchor.parentElement && getComputedStyle(anchor.parentElement).display;
@@ -266,7 +274,7 @@
     const requestId = crypto.randomUUID();
     activeRequest = requestId;
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'TRANSLATE_TEXT', text, requestId, formatting: settings.resultFormatEnabled === true ? formatting : [] });
+      const response = await globalThis.DRAGIT_RUNTIME.send({ type: 'TRANSLATE_TEXT', text, requestId, formatting: settings.resultFormatEnabled === true ? formatting : [] });
       if (version !== sequence) return;
       if (!response?.success) throw new Error(response?.error || '번역 응답을 받지 못했습니다. 다시 시도해주세요.');
       resultFormatting = response.formatting || [];

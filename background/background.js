@@ -80,6 +80,7 @@ async function requestGemini({ apiKey, model, text, instruction, signal }) {
     : /gemini-3(?:\.\d+)?-flash(?:-lite|-preview)?$/.test(model) ? { thinkingLevel: 'minimal' } : undefined;
   const timeout = AbortSignal.timeout(25000);
   const combined = AbortSignal.any([signal, timeout]);
+  let receivedHeaders = false;
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       combined.throwIfAborted();
@@ -93,11 +94,13 @@ async function requestGemini({ apiKey, model, text, instruction, signal }) {
           generationConfig: { temperature: 0.2, maxOutputTokens: 8192, ...(thinkingConfig ? { thinkingConfig } : {}) }
         })
       });
+      receivedHeaders = true;
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message = body.error?.message || response.statusText;
         if (response.status === 400 && /thinking/i.test(message) && thinkingConfig && attempt === 0) {
           thinkingConfig = undefined;
+          receivedHeaders = false;
           continue;
         }
         if (response.status === 429) {
@@ -119,7 +122,9 @@ async function requestGemini({ apiKey, model, text, instruction, signal }) {
     }
     throw new Error('모델 설정을 확인해주세요.');
   } catch (error) {
-    if (timeout.aborted && !signal.aborted) throw new Error('응답이 25초를 초과했습니다. 더 짧게 선택하거나 다시 시도해주세요.');
+    if (timeout.aborted && !signal.aborted) throw new Error(receivedHeaders
+      ? 'Gemini 응답 수신이 25초 안에 완료되지 않았습니다. 잠시 후 다시 시도해주세요.'
+      : 'Gemini가 25초 안에 응답하지 않았습니다. API 또는 네트워크 지연일 수 있습니다. 잠시 후 다시 시도하거나 Setting에서 다른 모델로 연결 테스트를 해주세요.');
     if (signal.aborted) throw new Error('번역 요청이 취소되었습니다.');
     if (error instanceof TypeError) throw new Error('Gemini에 연결하지 못했습니다. 네트워크를 확인하고 다시 시도해주세요.');
     throw error;

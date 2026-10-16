@@ -198,23 +198,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     const model = selectGeminiModel.value.trim() || globalThis.AI_TRANSLATOR_DEFAULTS.model;
-    await chrome.storage.local.set({ geminiApiKey: key, geminiModel: model });
     showTestResult("연결 테스트 중...", null);
     btnTestGeminiKey.disabled = true;
-
-    chrome.runtime.sendMessage({
-      type: "TEST_API_KEY",
-      apiKey: key,
-      model
-    }, (res) => {
+    try {
+      const res = await globalThis.DRAGIT_RUNTIME.send({
+        type: "TEST_API_KEY", apiKey: key, model, requestId: crypto.randomUUID()
+      });
+      if (!res?.success) throw new Error(res?.error || '연결 테스트 응답을 받지 못했습니다.');
+      showTestResult(`✓ 연결 성공! (응답: ${res.result})`, true);
+    } catch (error) {
+      showTestResult(`✗ 실패: ${error.message}`, false);
+    } finally {
       btnTestGeminiKey.disabled = false;
-      const connectionError = chrome.runtime.lastError?.message;
-      if (res && res.success) {
-        showTestResult(`✓ 연결 성공! (응답: ${res.result})`, true);
-      } else {
-        showTestResult(`✗ 실패: ${res?.error || connectionError || '알 수 없는 오류'}`, false);
-      }
-    });
+    }
   });
 
   function showTestResult(msg, isSuccess) {
