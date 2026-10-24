@@ -1,4 +1,4 @@
-/* Only inline code, bold and emphasis. Never interpret HTML or links. */
+/* Render validated source structure and inline styles, never raw HTML or links. */
 globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = [], sourceStyles = []) => {
   text = String(text ?? '');
   if (!enabled || text.length > 100000) { element.textContent = text; return; }
@@ -75,24 +75,66 @@ globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = [], sour
   }
   // Validated translation offsets are rendered with a tiny tag allowlist.
   // Never insert the model response as HTML.
-  const styles = Array.isArray(sourceStyles) && sourceStyles.length <= 128 && sourceStyles.every(s =>
+  const validBlock = block => block && ['ol', 'ul', 'heading', 'paragraph'].includes(block.type) &&
+    Number.isInteger(block.depth) && block.depth >= 0 && block.depth <= 6 &&
+    Number.isInteger(block.group) && Number.isSafeInteger(block.number);
+  const styles = Array.isArray(sourceStyles) && sourceStyles.length <= 256 && sourceStyles.every(s =>
     s && Number.isInteger(s.start) && Number.isInteger(s.end) && s.start >= 0 && s.end > s.start && s.end <= text.length &&
-    Array.isArray(s.styles) && s.styles.length > 0 && s.styles.every(style => ['strong', 'em', 'code'].includes(style))) ? sourceStyles : [];
-  let fragment;
-  if (styles.length) {
-    fragment = document.createDocumentFragment();
-    const bounds = [...new Set([0, text.length, ...styles.flatMap(s => [s.start, s.end])])].sort((a, b) => a - b);
+    Array.isArray(s.styles) && (s.styles.length > 0 || validBlock(s.block)) &&
+    (!s.block || validBlock(s.block)) && s.styles.every(style => ['strong', 'em', 'code'].includes(style))) ? sourceStyles : [];
+  function styledRange(from, to) {
+    const active = styles.filter(s => s.styles.length && s.start < to && s.end > from);
+    if (!active.length) return inline(text.slice(from, to));
+    const fragment = document.createDocumentFragment();
+    const bounds = [...new Set([from, to, ...active.flatMap(s => [Math.max(from, s.start), Math.min(to, s.end)])])].sort((a, b) => a - b);
     for (let i = 0; i < bounds.length - 1; i++) {
       const start = bounds[i], end = bounds[i + 1];
       let node = document.createTextNode(text.slice(start, end));
       for (const style of ['code', 'em', 'strong']) {
-        if (!styles.some(s => s.start <= start && s.end >= end && s.styles.includes(style))) continue;
+        if (!active.some(s => s.start <= start && s.end >= end && s.styles.includes(style))) continue;
         const wrapper = document.createElement(style);
         wrapper.append(node); node = wrapper;
       }
       fragment.append(node);
     }
-  } else fragment = inline(text);
+    return fragment;
+  }
+  const blocks = styles.filter(s => s.block).sort((a, b) => a.start - b.start);
+  let fragment;
+  if (blocks.length && !blocks.some((block, index) => index && block.start < blocks[index - 1].end)) {
+    fragment = document.createDocumentFragment();
+    let cursor = 0, list = null, listKey = '';
+    for (const span of blocks) {
+      if (text.slice(cursor, span.start).trim()) {
+        const gap = document.createElement('div'); gap.className = 'polish-paragraph';
+        gap.append(styledRange(cursor, span.start)); fragment.append(gap);
+        list = null;
+      }
+      const block = span.block;
+      if (block.type === 'ol' || block.type === 'ul') {
+        const key = `${block.type}:${block.group}:${block.depth}`;
+        if (!list || listKey !== key) {
+          list = document.createElement(block.type); list.className = 'polish-list';
+          list.style.marginInlineStart = `${block.depth * 1.25}em`;
+          if (block.type === 'ol') list.start = block.number;
+          fragment.append(list); listKey = key;
+        }
+        const item = document.createElement('li');
+        if (block.type === 'ol') item.value = block.number;
+        item.append(styledRange(span.start, span.end)); list.append(item);
+      } else {
+        list = null;
+        const node = document.createElement('div');
+        node.className = block.type === 'heading' ? 'polish-heading' : 'polish-paragraph';
+        node.append(styledRange(span.start, span.end)); fragment.append(node);
+      }
+      cursor = span.end;
+    }
+    if (text.slice(cursor).trim()) {
+      const tail = document.createElement('div'); tail.className = 'polish-paragraph';
+      tail.append(styledRange(cursor, text.length)); fragment.append(tail);
+    }
+  } else fragment = styledRange(0, text.length);
   // Restore exact code terms from the selection when the model omits backticks.
   // Only the selected <code> text is considered; never guess from normal prose.
   const terms = [...new Set(sourceCode)].filter(term => typeof term === 'string' && term.length > 0 && term.length <= 256 && !/[\r\n]/.test(term)).slice(0, 64).sort((a, b) => b.length - a.length);

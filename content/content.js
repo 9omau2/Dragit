@@ -48,6 +48,8 @@
     host = document.createElement('span');
     host.id = 'ai-selection-translator';
     host.style.cssText = 'all:initial!important;display:block!important;position:static!important;float:none!important;clear:both!important;width:auto!important;max-width:100%!important;min-width:0!important;margin:6px 0!important;box-sizing:border-box!important;text-indent:0!important;';
+    // In grid-based lists, use the full row rather than the narrow marker column.
+    host.style.setProperty('grid-column', '1 / -1', 'important');
     root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('link');
     style.rel = 'stylesheet';
@@ -139,6 +141,9 @@
     while (walker.nextNode()) if (range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
     let cursor = 0;
     const spans = [];
+    const blocks = [];
+    const groups = new Map();
+    const visited = new Set();
     for (const node of nodes) {
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : node.length;
@@ -149,12 +154,43 @@
       const match = pattern.exec(text);
       if (!match) continue;
       cursor = match.index + match[0].length;
+      const block = node.parentElement?.closest('li,h1,h2,h3,h4,h5,h6,p');
+      // Paragraphs inside an item belong to that item, including its marker.
+      const owner = block?.matches('p') ? block.closest('li') || block : block;
+      if (owner) {
+        let entry = blocks.at(-1);
+        if (entry?.owner !== owner) {
+          const list = owner.matches('li') ? owner.parentElement : null;
+          const type = list?.matches('ol') ? 'ol' : list?.matches('ul') ? 'ul' : /^H[1-6]$/.test(owner.tagName) ? 'heading' : 'paragraph';
+          let depth = 0, number = 1;
+          if (type === 'ol' || type === 'ul') {
+            for (let ancestor = list.parentElement?.closest('ol,ul'); ancestor; ancestor = ancestor.parentElement?.closest('ol,ul')) depth++;
+            if (!groups.has(list)) groups.set(list, groups.size);
+            if (type === 'ol') {
+              const items = [...list.children].filter(item => item.matches('li'));
+              number = list.hasAttribute('start') ? list.start : list.reversed ? items.length : 1;
+              for (const item of items) {
+                if (item.hasAttribute('value')) number = item.value;
+                if (item === owner) break;
+                number += list.reversed ? -1 : 1;
+              }
+            }
+          }
+          entry = { owner, start: match.index, end: cursor, style: 'block', block: {
+            type: visited.has(owner) ? 'paragraph' : type, depth: Math.min(depth, 6),
+            group: groups.get(list) ?? 0, number
+          } };
+          visited.add(owner);
+          blocks.push(entry);
+        } else entry.end = cursor;
+      }
       for (const [selector, style] of [['strong,b', 'strong'], ['em,i', 'em'], ['code', 'code']]) {
         if (node.parentElement?.closest(selector)) spans.push({ start: match.index, end: cursor, style });
       }
-      if (spans.length >= 128) break;
     }
-    return spans.slice(0, 128);
+    // Avoid preserving only half of a long selection's structure.
+    if (blocks.length + spans.length > 128) return spans.slice(0, 128);
+    return [...spans, ...blocks.map(({ owner, ...span }) => span)];
   }
 
   // The range end is in document order even when the user drags backwards.
@@ -271,9 +307,10 @@
       return;
     }
     status.textContent = '번역 중…';
-    const requestId = crypto.randomUUID();
-    activeRequest = requestId;
     try {
+      // randomUUID is unavailable on HTTP pages; getRandomValues works there too.
+      const requestId = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+      activeRequest = requestId;
       const response = await globalThis.DRAGIT_RUNTIME.send({ type: 'TRANSLATE_TEXT', text, requestId, formatting: settings.resultFormatEnabled === true ? formatting : [] });
       if (version !== sequence) return;
       if (!response?.success) throw new Error(response?.error || '번역 응답을 받지 못했습니다. 다시 시도해주세요.');
