@@ -17,7 +17,7 @@
     globalThis.DRAGIT_RESULT_FONTS.apply(result, settings);
     globalThis.DRAGIT_RESULT_FORMAT(result, rawResult, settings.resultFormatEnabled === true, resultCodeTerms, resultFormatting);
   }
-  let themeAnchor, themeFrame;
+  let themeAnchor, themeFrame, themeSamples = [];
   const themeObserver = new MutationObserver(() => scheduleTheme());
   function scheduleTheme() {
     cancelAnimationFrame(themeFrame);
@@ -27,7 +27,7 @@
     if (!panel) return;
     for (const property of [...panel.style]) if (property.startsWith('--panel-')) panel.style.removeProperty(property);
     if (settings.chameleonEnabled && themeAnchor?.isConnected) {
-      const palette = globalThis.DRAGIT_CHAMELEON.palette(themeAnchor);
+      const palette = globalThis.DRAGIT_CHAMELEON.palette(themeAnchor, themeSamples);
       for (const [property, value] of Object.entries(palette)) panel.style.setProperty(property, value);
     }
   }
@@ -36,8 +36,12 @@
     themeAnchor = anchor;
     applyTheme();
     if (!settings.chameleonEnabled) return;
-    for (let node = anchor; node; node = node.parentElement) {
-      themeObserver.observe(node, { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode', 'data-dark-mode'] });
+    const observed = new Set();
+    for (const source of [anchor, ...themeSamples.map(sample => sample.element)]) {
+      for (let node = source; node && !observed.has(node); node = node.parentElement) {
+        observed.add(node);
+        themeObserver.observe(node, { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode', 'data-dark-mode'] });
+      }
     }
   }
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', scheduleTheme);
@@ -87,7 +91,7 @@
     selectionButton.addEventListener('click', () => {
       const selection = pendingSelection;
       hideSelectionButton();
-      if (selection) translate(selection.text, '선택한 글', '', selection.anchor, selection.codeTerms, selection.formatting);
+      if (selection) translate(selection.text, '선택한 글', '', selection.anchor, selection.codeTerms, selection.formatting, selection.themeSamples);
     });
     iconRoot.append(selectionButton);
     document.documentElement.append(iconHost);
@@ -283,19 +287,20 @@
       const text = selectionText();
       if (!text) { hideSelectionButton(); return; }
       ensureUI();
-      pendingSelection = { text, anchor: selectionAnchor(), codeTerms: selectionCodeTerms(), formatting: selectionFormatting(text) };
+      pendingSelection = { text, anchor: selectionAnchor(), codeTerms: selectionCodeTerms(), formatting: selectionFormatting(text), themeSamples: globalThis.DRAGIT_CHAMELEON.captureSelection() };
       positionSelectionButton();
     }, 150);
   }
 
-  async function translate(text, label, note = '', anchor = selectionAnchor(), codeTerms = selectionCodeTerms(), formatting = selectionFormatting(text)) {
+  async function translate(text, label, note = '', anchor = selectionAnchor(), codeTerms = selectionCodeTerms(), formatting = selectionFormatting(text), samples = globalThis.DRAGIT_CHAMELEON.captureSelection()) {
     text = text.trim();
     if (!text) return;
     clearTimeout(timer);
     cancelActive();
     const version = sequence;
     hideSelectionButton();
-    lastPayload = [text, label, note, anchor, codeTerms, formatting];
+    lastPayload = [text, label, note, anchor, codeTerms, formatting, samples];
+    themeSamples = samples;
     resultCodeTerms = codeTerms;
     resultFormatting = [];
     placePanel(anchor);

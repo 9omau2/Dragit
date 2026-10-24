@@ -30,8 +30,43 @@ globalThis.DRAGIT_CHAMELEON = (() => {
     }
     return target;
   }
-  function palette(anchor) {
-    const foreground = parse(getComputedStyle(anchor).color);
+  function captureSelection() {
+    const selection = getSelection();
+    if (!selection?.rangeCount || selection.isCollapsed) return [];
+    const range = selection.getRangeAt(0), common = range.commonAncestorContainer;
+    const walker = document.createTreeWalker(common, NodeFilter.SHOW_TEXT);
+    const nodes = common.nodeType === Node.TEXT_NODE ? [common] : [];
+    while (walker.nextNode() && nodes.length < 2000) {
+      if (range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
+    }
+    const samples = new Map();
+    for (const node of nodes) {
+      const element = node.parentElement;
+      if (!element || element.closest('script,style,[hidden],[aria-hidden="true"],#ai-selection-translator')) continue;
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      const weight = node.textContent.slice(start, end).replace(/\s/g, '').length;
+      if (!weight) continue;
+      if (!samples.has(element) && samples.size >= 256) break;
+      samples.set(element, (samples.get(element) || 0) + weight);
+    }
+    return [...samples].map(([element, weight]) => ({ element, weight }));
+  }
+  function selectionForeground(samples, anchor) {
+    const visible = samples.filter(({ element }) => element.isConnected &&
+      getComputedStyle(element).visibility === 'visible' && element.getClientRects().length);
+    // A short heading, link or footnote must not tint an entire passage.
+    const body = visible.filter(({ element }) => !element.closest('h1,h2,h3,h4,h5,h6,a,code,pre,button'));
+    const colors = new Map();
+    for (const { element, weight } of body.length ? body : visible) {
+      const color = getComputedStyle(element).color;
+      colors.set(color, (colors.get(color) || 0) + weight);
+    }
+    const dominant = [...colors].sort((a, b) => b[1] - a[1])[0]?.[0];
+    return parse(dominant || getComputedStyle(anchor).color);
+  }
+  function palette(anchor, samples = []) {
+    const foreground = selectionForeground(samples, anchor);
     const layers = [];
     let complex = false;
     for (let node = anchor; node; node = node.parentElement) {
@@ -60,5 +95,5 @@ globalThis.DRAGIT_CHAMELEON = (() => {
       '--panel-code-bg': css(codeBackground), '--panel-code-text': css(codeText),
     };
   }
-  return { palette };
+  return { palette, captureSelection };
 })();
