@@ -1,9 +1,14 @@
 // Send a continuous passage with paired markers, never page HTML or attributes.
 export function markSource(text, input) {
+  const validCell = b => Number.isInteger(b.row) && b.row >= 0 && b.row < 128 &&
+    Number.isInteger(b.column) && b.column >= 0 && Number.isInteger(b.columns) && b.columns > 0 && b.columns <= 64 &&
+    Number.isInteger(b.colSpan) && b.colSpan > 0 && b.column + b.colSpan <= b.columns &&
+    Number.isInteger(b.rowSpan) && b.rowSpan > 0 && b.rowSpan <= 128 && typeof b.header === 'boolean';
   const spans = Array.isArray(input) ? input.slice(0, 128).filter(s => s &&
     Number.isInteger(s.start) && Number.isInteger(s.end) && s.start >= 0 &&
     s.end > s.start && s.end <= text.length && (['strong', 'em', 'code'].includes(s.style) ||
-      (s.style === 'block' && s.block && ['ol', 'ul', 'heading', 'paragraph'].includes(s.block.type) &&
+      (s.style === 'block' && s.block && ['ol', 'ul', 'heading', 'paragraph', 'pre', 'quote', 'cell'].includes(s.block.type) &&
+       (s.block.type !== 'cell' || validCell(s.block)) &&
        Number.isInteger(s.block.depth) && s.block.depth >= 0 && s.block.depth <= 6 &&
        Number.isInteger(s.block.group) && Number.isSafeInteger(s.block.number)))) : [];
   const blocks = spans.filter(s => s.style === 'block').sort((a, b) => a.start - b.start);
@@ -33,7 +38,8 @@ export function markSource(text, input) {
       activeBlock = run.block;
       blockId = null;
       if (activeBlock) {
-        blockId = `${prefix}b${markers.length}`;
+        // Reuse the existing code marker rule: a pre block stays untranslated.
+        blockId = `${prefix}${activeBlock.block.type === 'pre' ? 'c' : 'b'}${markers.length}`;
         markers.push({ id: blockId, styles: [], block: { ...activeBlock.block } });
         marked += `⟦${blockId}⟧`;
       }

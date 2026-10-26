@@ -75,7 +75,12 @@ globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = [], sour
   }
   // Validated translation offsets are rendered with a tiny tag allowlist.
   // Never insert the model response as HTML.
-  const validBlock = block => block && ['ol', 'ul', 'heading', 'paragraph'].includes(block.type) &&
+  const validCell = b => Number.isInteger(b.row) && b.row >= 0 && b.row < 128 &&
+    Number.isInteger(b.column) && b.column >= 0 && Number.isInteger(b.columns) && b.columns > 0 && b.columns <= 64 &&
+    Number.isInteger(b.colSpan) && b.colSpan > 0 && b.column + b.colSpan <= b.columns &&
+    Number.isInteger(b.rowSpan) && b.rowSpan > 0 && b.rowSpan <= 128 && typeof b.header === 'boolean';
+  const validBlock = block => block && ['ol', 'ul', 'heading', 'paragraph', 'pre', 'quote', 'cell'].includes(block.type) &&
+    (block.type !== 'cell' || validCell(block)) &&
     Number.isInteger(block.depth) && block.depth >= 0 && block.depth <= 6 &&
     Number.isInteger(block.group) && Number.isSafeInteger(block.number);
   const styles = Array.isArray(sourceStyles) && sourceStyles.length <= 256 && sourceStyles.every(s =>
@@ -99,19 +104,63 @@ globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = [], sour
     }
     return fragment;
   }
+  function renderTable(cells) {
+    const firstRow = Math.min(...cells.map(s => s.block.row));
+    const lastRow = Math.max(...cells.map(s => s.block.row));
+    const columns = cells[0].block.columns;
+    const occupied = new Set(), starts = new Map();
+    for (const span of cells) {
+      const b = span.block;
+      if (b.columns !== columns) return styledRange(cells[0].start, cells.at(-1).end);
+      for (let r = b.row; r <= Math.min(lastRow, b.row + b.rowSpan - 1); r++) {
+        for (let c = b.column; c < b.column + b.colSpan; c++) {
+          const key = `${r}:${c}`;
+          if (occupied.has(key)) return styledRange(cells[0].start, cells.at(-1).end);
+          occupied.add(key);
+        }
+      }
+      starts.set(`${b.row}:${b.column}`, span);
+    }
+    const table = document.createElement('table'); table.className = 'polish-table';
+    const body = document.createElement('tbody'); table.append(body);
+    for (let row = firstRow; row <= lastRow; row++) {
+      const tr = document.createElement('tr'); body.append(tr);
+      for (let column = 0; column < columns; column++) {
+        const key = `${row}:${column}`, span = starts.get(key);
+        if (!span && occupied.has(key)) continue;
+        const cell = document.createElement(span?.block.header ? 'th' : 'td');
+        if (span) {
+          cell.colSpan = span.block.colSpan;
+          cell.rowSpan = Math.min(span.block.rowSpan, lastRow - row + 1);
+          cell.append(styledRange(span.start, span.end));
+        }
+        tr.append(cell);
+      }
+    }
+    return table;
+  }
   const blocks = styles.filter(s => s.block).sort((a, b) => a.start - b.start);
   let fragment;
   if (blocks.length && !blocks.some((block, index) => index && block.start < blocks[index - 1].end)) {
     fragment = document.createDocumentFragment();
     let cursor = 0, list = null, listKey = '';
-    for (const span of blocks) {
+    for (let index = 0; index < blocks.length; index++) {
+      const span = blocks[index];
       if (text.slice(cursor, span.start).trim()) {
         const gap = document.createElement('div'); gap.className = 'polish-paragraph';
         gap.append(styledRange(cursor, span.start)); fragment.append(gap);
         list = null;
       }
       const block = span.block;
-      if (block.type === 'ol' || block.type === 'ul') {
+      if (block.type === 'cell') {
+        list = null;
+        const cells = [span];
+        while (blocks[index + 1]?.block.type === 'cell' && blocks[index + 1].block.group === block.group &&
+          !text.slice(cells.at(-1).end, blocks[index + 1].start).trim()) cells.push(blocks[++index]);
+        fragment.append(renderTable(cells));
+        cursor = cells.at(-1).end;
+        continue;
+      } else if (block.type === 'ol' || block.type === 'ul') {
         const key = `${block.type}:${block.group}:${block.depth}`;
         if (!list || listKey !== key) {
           list = document.createElement(block.type); list.className = 'polish-list';
@@ -122,6 +171,18 @@ globalThis.DRAGIT_RESULT_FORMAT = (element, text, enabled, sourceCode = [], sour
         const item = document.createElement('li');
         if (block.type === 'ol') item.value = block.number;
         item.append(styledRange(span.start, span.end)); list.append(item);
+      } else if (block.type === 'quote') {
+        list = null;
+        const quote = document.createElement('blockquote');
+        quote.className = block.boxed === true ? 'polish-quote polish-quote-box' : 'polish-quote';
+        quote.append(styledRange(span.start, span.end)); fragment.append(quote);
+      } else if (block.type === 'pre') {
+        list = null;
+        const pre = document.createElement('pre'); pre.className = 'polish-code-block';
+        pre.setAttribute('aria-label', '코드 블록');
+        const code = document.createElement('code');
+        code.textContent = text.slice(span.start, span.end);
+        pre.append(code); fragment.append(pre);
       } else {
         list = null;
         const node = document.createElement('div');

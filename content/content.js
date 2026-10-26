@@ -136,6 +136,36 @@
     return [...new Set(terms)].filter(term => term && term.length <= 256 && !/[\r\n]/.test(term)).slice(0, 64);
   }
 
+  function tableLayout(table) {
+    const rows = [...table.rows];
+    if (rows.length > 128 || table.querySelector('table')) return null;
+    const occupied = [], cells = new Map();
+    let columns = 0;
+    for (let row = 0; row < rows.length; row++) {
+      let column = 0;
+      for (const cell of rows[row].cells) {
+        while (occupied[row]?.[column]) column++;
+        const colSpan = cell.colSpan;
+        const sectionRemaining = rows[row].parentElement.rows.length - rows[row].sectionRowIndex;
+        const rowSpan = Math.min(cell.rowSpan || sectionRemaining, sectionRemaining);
+        if (column + colSpan > 64 || rowSpan > 128) return null;
+        for (let r = row; r < row + rowSpan; r++) {
+          occupied[r] ||= [];
+          for (let c = column; c < column + colSpan; c++) {
+            if (occupied[r][c]) return null;
+            occupied[r][c] = true;
+          }
+        }
+        cells.set(cell, { row, column, rowSpan, colSpan, header: cell.matches('th') || rows[row].parentElement.matches('thead') ||
+          (row === 0 && table.matches('[data-ke-style="style12"]')) });
+        column += colSpan;
+        columns = Math.max(columns, column);
+      }
+    }
+    for (const cell of cells.values()) cell.columns = columns;
+    return cells;
+  }
+
   function selectionFormatting(text) {
     const selection = getSelection();
     if (!selection?.rangeCount || selection.isCollapsed || text.length > maxChars) return [];
@@ -148,24 +178,35 @@
     const blocks = [];
     const groups = new Map();
     const visited = new Set();
+    const tables = new Map();
     for (const node of nodes) {
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : node.length;
-      const value = node.textContent.slice(start, end).trim();
+      const selected = node.textContent.slice(start, end);
+      const pre = node.parentElement?.closest('pre');
+      const value = selected.trim();
       if (!value) continue;
       const pattern = new RegExp(value.split(/\s+/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'), 'g');
       pattern.lastIndex = cursor;
-      const match = pattern.exec(text);
+      // In preformatted text prefer an exact match, including indentation.
+      const exact = pre ? text.indexOf(selected, cursor) : -1;
+      const match = exact >= 0 ? { index: exact, 0: selected } : pattern.exec(text);
       if (!match) continue;
       cursor = match.index + match[0].length;
       const block = node.parentElement?.closest('li,h1,h2,h3,h4,h5,h6,p');
+      const quote = node.parentElement?.closest('blockquote');
+      const cell = node.parentElement?.closest('td,th');
+      const table = cell?.closest('table');
+      if (table && !tables.has(table)) tables.set(table, tableLayout(table));
+      const cellLayout = tables.get(table)?.get(cell);
       // Paragraphs inside an item belong to that item, including its marker.
-      const owner = block?.matches('p') ? block.closest('li') || block : block;
+      const owner = cellLayout ? cell : pre || (quote && (!block || block.matches('p')) ? quote : (block?.matches('p') ? block.closest('li') || block : block));
       if (owner) {
         let entry = blocks.at(-1);
         if (entry?.owner !== owner) {
           const list = owner.matches('li') ? owner.parentElement : null;
-          const type = list?.matches('ol') ? 'ol' : list?.matches('ul') ? 'ul' : /^H[1-6]$/.test(owner.tagName) ? 'heading' : 'paragraph';
+          const type = cellLayout ? 'cell' : pre ? 'pre' : owner.matches('blockquote') ? 'quote' : list?.matches('ol') ? 'ol' : list?.matches('ul') ? 'ul' : /^H[1-6]$/.test(owner.tagName) ? 'heading' : 'paragraph';
+          if (cellLayout && !groups.has(table)) groups.set(table, groups.size);
           let depth = 0, number = 1;
           if (type === 'ol' || type === 'ul') {
             for (let ancestor = list.parentElement?.closest('ol,ul'); ancestor; ancestor = ancestor.parentElement?.closest('ol,ul')) depth++;
@@ -182,14 +223,16 @@
           }
           entry = { owner, start: match.index, end: cursor, style: 'block', block: {
             type: visited.has(owner) ? 'paragraph' : type, depth: Math.min(depth, 6),
-            group: groups.get(list) ?? 0, number
+            group: groups.get(cellLayout ? table : list) ?? 0, number,
+            ...(type === 'quote' ? { boxed: owner.getAttribute('data-ke-style') === 'style3' } : {}),
+            ...(cellLayout ? cellLayout : {})
           } };
           visited.add(owner);
           blocks.push(entry);
         } else entry.end = cursor;
       }
       for (const [selector, style] of [['strong,b', 'strong'], ['em,i', 'em'], ['code', 'code']]) {
-        if (node.parentElement?.closest(selector)) spans.push({ start: match.index, end: cursor, style });
+        if ((!pre || cellLayout) && node.parentElement?.closest(selector)) spans.push({ start: match.index, end: cursor, style });
       }
     }
     // Avoid preserving only half of a long selection's structure.
@@ -227,6 +270,10 @@
   function placePanel(anchor) {
     ensureUI();
     anchor = anchor?.isConnected && anchor !== host ? anchor : document.body;
+    // Highlighted code can be display:block inside a pre. Escape the entire pre
+    // or table so the result cannot enlarge a code scroller or a table cell.
+    let container = anchor.closest('pre, table');
+    while (container) { anchor = container; container = container.parentElement?.closest('pre, table'); }
     // A block can itself be a link, or live inside one. Keep the entire result
     // outside clickable ancestors, including when flex/grid placement appends it.
     const clickable = 'a[href], button, label, [role="link"], [role="button"]';
@@ -235,18 +282,20 @@
       if (!container) break;
       anchor = findBlock(container.parentElement) || document.body;
     }
-    // Stay inside list items / table cells. In a row or grid, append to the text block
+    // Stay inside list items. In a row or grid, append to the text block
     // instead of creating a new layout column or changing list numbering.
     const parentDisplay = anchor.parentElement && getComputedStyle(anchor.parentElement).display;
-    const inside = anchor === document.body || anchor.matches('li, dt, dd, td, th, figcaption') ||
-      /^(flex|inline-flex|grid|inline-grid)$/.test(parentDisplay);
+    const inside = !anchor.matches('pre, table') && (anchor === document.body || anchor.matches('li, dt, dd, figcaption') ||
+      /^(flex|inline-flex|grid|inline-grid)$/.test(parentDisplay));
     if (inside) {
       if (host.parentNode !== anchor || host !== anchor.lastChild) anchor.append(host);
     } else if (anchor.nextSibling !== host) {
       anchor.after(host);
     }
     panel.hidden = false;
-    watchTheme(anchor);
+    // Code and table surfaces can have their own background. The result now
+    // lives outside them, so sample its surrounding surface instead.
+    watchTheme(anchor.matches('pre, table') ? host.parentElement : anchor);
     widenPanel();
   }
 

@@ -11,7 +11,7 @@ A Chrome extension powered by Gemini.
 - Custom context for terminology and tone
 - Target language selector and on/off toggle
 - Chameleon mode: match translation colors to the webpage
-- Text polish: preserve lists, headings, emphasis, italics and inline code
+- Text polish: preserve tables, quotes, code blocks, lists, headings and inline formatting
 - Optional PDF viewer with a translation panel
 - Result font and size controls in Setting
 

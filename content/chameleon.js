@@ -84,11 +84,13 @@ globalThis.DRAGIT_CHAMELEON = (() => {
     const text = readable(blend(foreground, background), background);
     const header = blend(text, background, .035);
     const accent = readable(luminance(background) < .25 ? [192, 164, 255] : [91, 33, 182], header);
+    const resultHeader = blend(text, background, .11);
     const codeBackground = blend(text, background, .075);
     const codeText = readable(luminance(background) < .25 ? [183, 216, 255] : [77, 52, 137], codeBackground);
     return {
       '--panel-bg': css(background), '--panel-text': css(text),
       '--panel-header': css(header), '--panel-heading': css(readable(text, header)),
+      '--panel-result-header': css(resultHeader), '--panel-result-heading': css(readable(text, resultHeader)),
       '--panel-border': css(blend(text, background, .2)), '--panel-edge': css(blend(text, background, .2)),
       '--panel-muted': css(readable(blend(text, background, .72), background)),
       '--panel-accent': css(accent), '--panel-hover': css(blend(text, background, .08)),
