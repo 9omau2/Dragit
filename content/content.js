@@ -136,9 +136,20 @@
     return [...new Set(terms)].filter(term => term && term.length <= 256 && !/[\r\n]/.test(term)).slice(0, 64);
   }
 
+  function isLayoutTable(table) {
+    const role = table.getAttribute('role')?.toLowerCase();
+    if (role === 'presentation' || role === 'none') return true;
+    if (role === 'table' || role === 'grid' || role === 'treegrid') return false;
+    const rows = [...table.rows];
+    // Email templates use nested or single-column tables as page containers.
+    // Explicit headers still identify a data table, even with one column.
+    if (rows.some(row => row.parentElement.matches('thead') || [...row.cells].some(cell => cell.matches('th')))) return false;
+    return !!table.querySelector('table') || rows.every(row => row.cells.length <= 1);
+  }
+
   function tableLayout(table) {
     const rows = [...table.rows];
-    if (rows.length > 128 || table.querySelector('table')) return null;
+    if (isLayoutTable(table) || rows.length > 128 || table.querySelector('table')) return null;
     const occupied = [], cells = new Map();
     let columns = 0;
     for (let row = 0; row < rows.length; row++) {
@@ -270,10 +281,11 @@
   function placePanel(anchor) {
     ensureUI();
     anchor = anchor?.isConnected && anchor !== host ? anchor : document.body;
-    // Highlighted code can be display:block inside a pre. Escape the entire pre
-    // or table so the result cannot enlarge a code scroller or a table cell.
-    let container = anchor.closest('pre, table');
-    while (container) { anchor = container; container = container.parentElement?.closest('pre, table'); }
+    // Escape code scrollers and data tables, but stay near the selected text
+    // inside email layout tables instead of jumping below the entire email.
+    for (let container = anchor; container; container = container.parentElement) {
+      if (container.matches('pre') || (container.matches('table') && !isLayoutTable(container))) anchor = container;
+    }
     // A block can itself be a link, or live inside one. Keep the entire result
     // outside clickable ancestors, including when flex/grid placement appends it.
     const clickable = 'a[href], button, label, [role="link"], [role="button"]';
@@ -285,7 +297,7 @@
     // Stay inside list items. In a row or grid, append to the text block
     // instead of creating a new layout column or changing list numbering.
     const parentDisplay = anchor.parentElement && getComputedStyle(anchor.parentElement).display;
-    const inside = !anchor.matches('pre, table') && (anchor === document.body || anchor.matches('li, dt, dd, figcaption') ||
+    const inside = !anchor.matches('pre, table') && (anchor === document.body || anchor.matches('li, dt, dd, figcaption, td, th') ||
       /^(flex|inline-flex|grid|inline-grid)$/.test(parentDisplay));
     if (inside) {
       if (host.parentNode !== anchor || host !== anchor.lastChild) anchor.append(host);
