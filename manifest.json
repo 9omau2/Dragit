@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dragit",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
