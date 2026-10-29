@@ -329,14 +329,19 @@
     if (!pendingSelection || !selectionButton) return;
     const selection = window.getSelection();
     if (!selection?.rangeCount || selection.isCollapsed) { hideSelectionButton(); return; }
-    const rects = [...selection.getRangeAt(0).getClientRects()].filter(rect => rect.width && rect.height);
-    const rect = rects.at(-1);
-    if (!rect || rect.bottom < 0 || rect.top > innerHeight || rect.right < 0 || rect.left > innerWidth) {
+    const range = selection.getRangeAt(0);
+    // Long selections can end offscreen while selected text is still visible.
+    // Anchor to the visible portion, following the direction of the selection.
+    const rects = [...range.getClientRects()].filter(rect => rect.width && rect.height &&
+      rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth);
+    const backwards = selection.focusNode === range.startContainer && selection.focusOffset === range.startOffset;
+    const rect = backwards ? rects[0] : rects.at(-1);
+    if (!rect) {
       selectionButton.hidden = true;
       return;
     }
-    selectionButton.style.left = Math.max(6, Math.min(rect.right - 18, innerWidth - 42)) + 'px';
-    selectionButton.style.top = Math.max(6, Math.min(rect.bottom + 5, innerHeight - 42)) + 'px';
+    selectionButton.style.left = Math.max(6, Math.min(backwards ? rect.left - 18 : rect.right - 18, innerWidth - 42)) + 'px';
+    selectionButton.style.top = Math.max(6, Math.min(backwards ? rect.top - 39 : rect.bottom + 5, innerHeight - 42)) + 'px';
     selectionButton.hidden = false;
   }
 
