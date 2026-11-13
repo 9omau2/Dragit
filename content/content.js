@@ -147,9 +147,22 @@
     return !!table.querySelector('table') || rows.every(row => row.cells.length <= 1);
   }
 
+  function isCodeLayoutTable(table) {
+    if (table.matches('[role="table"], [role="grid"], [role="treegrid"]') || table.querySelector('th, thead, table')) return false;
+    const rows = [...table.rows];
+    return rows.length > 0 && rows.every(row => {
+      if (row.cells.length !== 2) return false;
+      const [gutter, code] = row.cells;
+      const numbers = gutter.textContent.trim();
+      return /^\d+(?:\s+\d+)*$/.test(numbers) && !!code.querySelector('pre') &&
+        (gutter.matches('.rouge-gutter, .gutter, .linenos, .line-numbers') ||
+         !!gutter.querySelector('.lineno, .line-numbers') || getComputedStyle(gutter).userSelect === 'none');
+    });
+  }
+
   function tableLayout(table) {
     const rows = [...table.rows];
-    if (isLayoutTable(table) || rows.length > 128 || table.querySelector('table')) return null;
+    if (isLayoutTable(table) || isCodeLayoutTable(table) || rows.length > 128 || table.querySelector('table')) return null;
     const occupied = [], cells = new Map();
     let columns = 0;
     for (let row = 0; row < rows.length; row++) {
@@ -211,8 +224,8 @@
       const cell = node.parentElement?.closest('td,th');
       const table = cell?.closest('table');
       if (table && !tables.has(table)) tables.set(table, tableLayout(table));
-      // Highlighters lay out code in table cells; it is still a code block.
-      const cellLayout = pre ? undefined : tables.get(table)?.get(cell);
+      // Only line-number layout tables are flattened; real data cells stay intact.
+      const cellLayout = tables.get(table)?.get(cell);
       // Paragraphs inside an item belong to that item, including its marker.
       const owner = cellLayout ? cell : pre || (quote && (!block || block.matches('p')) ? quote : (block?.matches('p') ? block.closest('li') || block : block));
       if (owner) {
@@ -259,26 +272,30 @@
     const selection = window.getSelection();
     if (!selection?.rangeCount || selection.isCollapsed) return null;
     const range = selection.getRangeAt(0);
+    const walker = document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
     let node = range.endContainer;
     if (node.nodeType === Node.ELEMENT_NODE && range.endOffset > 0) {
       node = node.childNodes[range.endOffset - 1];
       while (node.lastChild) node = node.lastChild;
-    } else if (range.endOffset === 0) {
-      while (node && node !== document.body && !node.previousSibling) node = node.parentNode;
-      if (node?.previousSibling) {
-        node = node.previousSibling;
-        while (node.lastChild) node = node.lastChild;
+    }
+    walker.currentNode = node;
+    // Stay within the selection and skip whitespace, scripts and hidden text.
+    // A block inside a hidden ancestor can still have display:block itself.
+    while (node) {
+      if (node.nodeType === Node.TEXT_NODE && range.intersectsNode(node)) {
+        const start = node === range.startContainer ? range.startOffset : 0;
+        const end = node === range.endContainer ? range.endOffset : node.length;
+        const style = node.parentElement && getComputedStyle(node.parentElement);
+        if (node.textContent.slice(start, end).trim() && style?.visibility === 'visible' && style.userSelect !== 'none') {
+          const selected = document.createRange();
+          selected.setStart(node, start);
+          selected.setEnd(node, end);
+          if ([...selected.getClientRects()].some(rect => rect.width && rect.height)) return findBlock(node.parentElement);
+        }
       }
+      node = walker.previousNode();
     }
-    // Whitespace between blocks belongs to their container, not the selected
-    // paragraph. Anchor to the last visible text before it instead.
-    if (node?.nodeType === Node.TEXT_NODE && !node.textContent.trim()) {
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT,
-        { acceptNode: text => text.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP });
-      walker.currentNode = node;
-      node = walker.previousNode() || node;
-    }
-    return findBlock(node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement);
+    return null;
   }
 
   function findBlock(element) {
