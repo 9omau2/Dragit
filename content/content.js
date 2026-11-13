@@ -267,6 +267,14 @@
         while (node.lastChild) node = node.lastChild;
       }
     }
+    // Whitespace between blocks belongs to their container, not the selected
+    // paragraph. Anchor to the last visible text before it instead.
+    if (node?.nodeType === Node.TEXT_NODE && !node.textContent.trim()) {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT,
+        { acceptNode: text => text.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP });
+      walker.currentNode = node;
+      node = walker.previousNode() || node;
+    }
     return findBlock(node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement);
   }
 
