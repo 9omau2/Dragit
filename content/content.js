@@ -197,6 +197,8 @@
       const pre = node.parentElement?.closest('pre');
       const value = selected.trim();
       if (!value) continue;
+      // Unselectable text (code line numbers) is not part of the selection string.
+      if (node.parentElement && getComputedStyle(node.parentElement).userSelect === 'none') continue;
       const pattern = new RegExp(value.split(/\s+/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'), 'g');
       pattern.lastIndex = cursor;
       // In preformatted text prefer an exact match, including indentation.
@@ -209,7 +211,8 @@
       const cell = node.parentElement?.closest('td,th');
       const table = cell?.closest('table');
       if (table && !tables.has(table)) tables.set(table, tableLayout(table));
-      const cellLayout = tables.get(table)?.get(cell);
+      // Highlighters lay out code in table cells; it is still a code block.
+      const cellLayout = pre ? undefined : tables.get(table)?.get(cell);
       // Paragraphs inside an item belong to that item, including its marker.
       const owner = cellLayout ? cell : pre || (quote && (!block || block.matches('p')) ? quote : (block?.matches('p') ? block.closest('li') || block : block));
       if (owner) {
@@ -266,6 +269,14 @@
         node = node.previousSibling;
         while (node.lastChild) node = node.lastChild;
       }
+    }
+    // Whitespace between blocks belongs to their container, not the selected
+    // paragraph. Anchor to the last visible text before it instead.
+    if (node?.nodeType === Node.TEXT_NODE && !node.textContent.trim()) {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT,
+        { acceptNode: text => text.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP });
+      walker.currentNode = node;
+      node = walker.previousNode() || node;
     }
     return findBlock(node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement);
   }
